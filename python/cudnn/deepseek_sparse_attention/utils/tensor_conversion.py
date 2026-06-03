@@ -3,6 +3,18 @@
 from cutlass.cute.runtime import from_dlpack
 
 
+def _dim_order(t):
+    if hasattr(t, "dim_order"):
+        return t.dim_order()
+    return tuple(
+        i for i, _ in sorted(
+            enumerate(tuple(t.stride())),
+            key=lambda item: item[1],
+            reverse=True,
+        )
+    )
+
+
 def to_cute_tensor(
     t,
     assumed_align: int = 16,
@@ -19,5 +31,5 @@ def to_cute_tensor(
         leading_dim = t.ndim - 1
     tensor = tensor.mark_layout_dynamic(leading_dim=leading_dim)
     if divisibility is not None:
-        tensor = tensor.mark_compact_shape_dynamic(mode=leading_dim, stride_order=t.dim_order(), divisibility=divisibility)
+        tensor = tensor.mark_compact_shape_dynamic(mode=leading_dim, stride_order=_dim_order(t), divisibility=divisibility)
     return tensor
