@@ -18,7 +18,8 @@ import cuda.bindings.driver as cuda
 import cutlass
 import cutlass.cute as cute
 import cutlass.utils as utils
-import torch
+# import torch
+import paddle as torch # why need this? lazy import?
 from cutlass.utils.distributed import atomicAdd
 
 from .block_scan import block_prefix_sum_kernel
@@ -677,9 +678,9 @@ def cute_dsl_topk_wrapper(
     else:
         compiled_kernel = _compile_cache[key]
 
-    output_indices_torch = torch.empty(num_rows, top_k, dtype=torch.int32, device="cuda")
+    output_indices_torch = torch.empty(num_rows, top_k, dtype=torch.int32)
     if return_val:
-        output_values_torch = torch.empty(num_rows, top_k, dtype=torch_dtype, device="cuda")
+        output_values_torch = torch.empty(num_rows, top_k, dtype=torch_dtype)
     else:
         output_values_torch = None
 
@@ -688,7 +689,7 @@ def cute_dsl_topk_wrapper(
     else:
         buffer_numbers = 1
     # Note: zeros will trigger an elementwise_add kernel.
-    buffer_torch = torch.empty(num_rows, buffer_numbers, num_cols, dtype=torch.int32, device="cuda")
+    buffer_torch = torch.empty(num_rows, buffer_numbers, num_cols, dtype=torch.int32)
     g_global_counter_torch = None
 
     # TVM FFI uses env stream automatically

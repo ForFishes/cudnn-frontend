@@ -71,7 +71,7 @@ class TensorDesc:
         stride = tuple(self.stride)
         stride_order = tuple(self.stride_order)
         device = self.device
-        if not isinstance(device, torch.device):
+        if not isinstance(device, torch.device.Device):
             try:
                 device = torch.device(device)
             except (TypeError, ValueError, RuntimeError) as exc:
@@ -250,7 +250,8 @@ class TensorDesc:
         new_stride = self.stride[:dim] + (inserted_stride,) + self.stride[dim:]
         return self._with_layout(new_shape, new_stride)
 
-    def is_contiguous(self, memory_format: torch.memory_format = torch.contiguous_format) -> bool:
+    def is_contiguous(self, memory_format: torch.memory_format = "torch.contiguous_format") -> bool:
+        raise NotImplementedError("is_contiguous is not implemented")
         if memory_format in {torch.contiguous_format, torch.preserve_format}:
             if self._numel(self.shape) == 0:
                 return True
@@ -596,6 +597,7 @@ class APIBase(ABC):
         :return: True if tensor/dtype is an FP4x2 packed type
         :rtype: bool
         """
+        return False # Paddle not support FP4 dtype now
         if tensor_or_dtype is None:
             return False
         if isinstance(tensor_or_dtype, TensorDesc):

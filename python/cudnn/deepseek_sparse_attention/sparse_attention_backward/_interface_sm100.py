@@ -10,12 +10,22 @@ import cutlass.cute as cute
 from cudnn.deepseek_sparse_attention.utils.runtime import resolve_stream
 from cudnn.deepseek_sparse_attention.utils.tensor_conversion import to_cute_tensor
 from .dsa_bwd_sm100 import FlashAttentionDSABackwardSm100
+from contextlib import contextmanager
+import paddle
 
 torch2cute_dtype_map = {
     torch.float16: cutlass.Float16,
     torch.bfloat16: cutlass.BFloat16,
     torch.float32: cutlass.Float32,
 }
+
+@contextmanager
+def nvtx_range(msg: str):
+    paddle.cuda.nvtx.range_push(msg)
+    try:
+        yield
+    finally:
+        paddle.cuda.nvtx.range_pop()
 
 
 def flash_attn_bwd_sm100(
@@ -151,7 +161,7 @@ def flash_attn_bwd_sm100(
             block_tile=block_tile,
         )
 
-        with torch.cuda.nvtx.range("flash_attn_bwd_sm100_compile"):
+        with nvtx_range("flash_attn_bwd_sm100_compile"):
             flash_attn_bwd_sm100.compile_cache[compile_key] = cute.compile(
                 kernel_obj,
                 problem_shape,
@@ -173,7 +183,7 @@ def flash_attn_bwd_sm100(
                 options="--enable-tvm-ffi",
             )
 
-    with torch.cuda.nvtx.range("flash_attn_bwd_sm100_kernel"):
+    with nvtx_range("flash_attn_bwd_sm100_kernel"):
         flash_attn_bwd_sm100.compile_cache[compile_key](
             problem_shape,
             q,

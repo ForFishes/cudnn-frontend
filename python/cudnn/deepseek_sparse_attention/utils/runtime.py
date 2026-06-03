@@ -20,7 +20,7 @@ def maybe_contiguous(x):
 def resolve_stream(current_stream: Optional[cuda.CUstream] = None) -> cuda.CUstream:
     if current_stream is not None:
         return current_stream
-    return cuda.CUstream(torch.cuda.current_stream().cuda_stream)
+    return cuda.CUstream(torch.cuda.current_stream().stream_base.raw_stream)
 
 
 def torch_stream_context(current_stream: Optional[cuda.CUstream] = None):

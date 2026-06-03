@@ -78,6 +78,7 @@ from cudnn.deepseek_sparse_attention.utils.compiler import compile_options
 from cudnn.deepseek_sparse_attention.utils.copy import cpasync_reduce_bulk_add_f32
 from cudnn.deepseek_sparse_attention.utils.runtime import resolve_stream as _resolve_stream
 from cudnn.deepseek_sparse_attention.utils.seqlen import seqlen_info as _seqlen_info
+from cudnn.deepseek_sparse_attention.utils.tensor_conversion import to_cute_tensor
 
 mul_packed_f32x2 = partial(cute.arch.mul_packed_f32x2, rnd="rn")
 fma_packed_f32x2 = partial(cute.arch.fma_packed_f32x2, rnd="rn")
@@ -1882,7 +1883,6 @@ def dense_indexer_backward_sm100(
 
 
 def _build_cute_dsl_kernel(batch, max_seqlen_q, max_seqlen_k, heads, dim, sm_scale, block_I, ratio, is_varlen):
-    from cudnn.deepseek_sparse_attention.utils.tensor_conversion import to_cute_tensor
 
     if torch.cuda.get_device_capability()[0] < 10:
         raise RuntimeError("Requires SM100+")

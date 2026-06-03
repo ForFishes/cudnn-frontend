@@ -11,12 +11,12 @@ from cudnn.api_base import APIBase, TupleDict
 
 from .local_to_global_dsl import local_to_global as _local_to_global
 from .compactify import compactify as _compactify
+from .indexer_top_k_decode_varlen import cute_dsl_topk_wrapper
 
 _SUPPORTED_DTYPES = (torch.float32, torch.float16, torch.bfloat16)
 
 
 def _get_cute_dsl_topk_wrapper():
-    from .indexer_top_k_decode_varlen import cute_dsl_topk_wrapper
 
     return cute_dsl_topk_wrapper
 

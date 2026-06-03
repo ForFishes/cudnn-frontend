@@ -53,6 +53,8 @@ import math
 from functools import partial
 import torch
 import cuda.bindings.driver as cuda
+import paddle
+from contextlib import contextmanager
 
 import cutlass
 import cutlass.cute as cute
@@ -76,9 +78,19 @@ from cudnn.deepseek_sparse_attention.utils.runtime import (
     resolve_stream as _resolve_stream,
     torch_stream_context as _torch_stream_context,
 )
+from cudnn.deepseek_sparse_attention.utils.tensor_conversion import to_cute_tensor
+
 
 mul_packed_f32x2 = partial(cute.arch.mul_packed_f32x2, rnd="rn")
 fma_packed_f32x2 = partial(cute.arch.fma_packed_f32x2, rnd="rn")
+
+@contextmanager
+def nvtx_range(msg: str):
+    paddle.cuda.nvtx.range_push(msg)
+    try:
+        yield
+    finally:
+        paddle.cuda.nvtx.range_pop()
 
 
 # Barrier indices for kernel_gemm — per-stage barriers for S_FULL, DS_READY, K_LOADED
@@ -1527,7 +1539,6 @@ class ScoreGradSm100:
 
 
 def _score_grad_inplace_cute(AttnScore, IndexScore, GradLoss, grad_scale, current_stream=None):
-    from cudnn.deepseek_sparse_attention.utils.tensor_conversion import to_cute_tensor
 
     # Kernel reads ``mGradLoss[0]`` so it must be at least 1-D. ``to_cute_tensor``
     # defaults ``leading_dim = ndim - 1`` which collapses to -1 for a 0-D scalar
@@ -1592,7 +1603,6 @@ def _score_grad_inplace(AttnScore, IndexScore, GradLoss, grad_scale, block_I=128
 
 
 def _build_cute_dsl_kernel(batch, seqlen, seqlen_k, heads, dim, topk, sm_scale, block_I, topk_indices_global: bool = True):
-    from cudnn.deepseek_sparse_attention.utils.tensor_conversion import to_cute_tensor
 
     if torch.cuda.get_device_capability()[0] < 10:
         raise RuntimeError("Requires SM100+")
@@ -1623,7 +1633,8 @@ def _build_cute_dsl_kernel(batch, seqlen, seqlen_k, heads, dim, topk, sm_scale, 
         """Run only kernel 2 (GEMM). Caller must have run kernel 1 and zeroed dIndexK_f32."""
         s = _resolve_stream(current_stream)
         _ensure_compiled(IndexQ, Weights, IndexK, dIndexQ, dWeights, dIndexK_f32, GradSignal, TopkIndices, current_stream=current_stream)
-        with torch.cuda.nvtx.range("indexer_backward_dsl_gemm"):
+        # with torch.cuda.nvtx.range("indexer_backward_dsl_gemm"):
+        with nvtx_range("indexer_backward_dsl_gemm"):
             compiled_holder[0](
                 IndexQ,
                 Weights,
@@ -1656,7 +1667,7 @@ def _build_cute_dsl_kernel(batch, seqlen, seqlen_k, heads, dim, topk, sm_scale, 
                 dIndexK_f32 = torch.zeros_like(dIndexK, dtype=torch.float32)
             _run_gemm_only(IndexQ, Weights, IndexK, dIndexQ, dWeights, dIndexK_f32, AttnScore, TopkIndices, current_stream=current_stream)
             with _torch_stream_context(current_stream):
-                dIndexK.copy_(dIndexK_f32)
+                dIndexK.copy_(dIndexK_f32.astype(dIndexK.dtype))
 
     _run.score_grad = partial(_score_grad_inplace, block_I=block_I)
     _run.gemm_only = _run_gemm_only
