@@ -84,6 +84,14 @@ from cudnn.deepseek_sparse_attention.utils.tensor_conversion import to_cute_tens
 mul_packed_f32x2 = partial(cute.arch.mul_packed_f32x2, rnd="rn")
 fma_packed_f32x2 = partial(cute.arch.fma_packed_f32x2, rnd="rn")
 
+@contextmanager
+def nvtx_range(msg: str):
+    paddle.cuda.nvtx.range_push(msg)
+    try:
+        yield
+    finally:
+        paddle.cuda.nvtx.range_pop()
+
 
 # Barrier indices for kernel_gemm — per-stage barriers for S_FULL, DS_READY, K_LOADED
 # to avoid phase-wrap when producer runs 2 blocks ahead of consumer.
