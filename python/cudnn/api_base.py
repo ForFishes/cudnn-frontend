@@ -118,8 +118,12 @@ class TensorDesc:
         stride = tuple(self.stride)
         stride_order = tuple(self.stride_order)
         device = self.device
-        torch = _torch()
-        if torch is not None and not isinstance(device, (torch.device, Device)):
+        # ``_torch()`` probes ``sys.modules["torch"]``, which on this branch is
+        # either absent or a real PyTorch installed alongside Paddle -- neither
+        # describes a Paddle device.  Probe Paddle directly instead.
+        import paddle as torch
+
+        if not isinstance(device, (torch.device.Device, Device)):
             try:
                 device = torch.device(device)
             except (TypeError, ValueError, RuntimeError) as exc:
@@ -661,6 +665,7 @@ class APIBase(ABC):
         :return: True if tensor/dtype is an FP4x2 packed type
         :rtype: bool
         """
+        return False # Paddle not support FP4 dtype now
         if tensor_or_dtype is None:
             return False
         if isinstance(tensor_or_dtype, TensorDesc):
