@@ -28,7 +28,7 @@ def is_torch_available():
     # this condition ensures that datatype mapping is only created once
     if torch_available is None:
         try:
-            import torch
+            import paddle as torch
 
             torch_available = True
             _torch_to_cudnn_data_type_dict = {
@@ -68,7 +68,7 @@ def is_cutlass_available():
     global cutlass_available, _torch_to_cutlass_data_type_dict
     if cutlass_available is None:
         try:
-            import torch
+            import paddle as torch
             import cutlass
 
             cutlass_available = True
@@ -107,7 +107,7 @@ def _torch_to_cudnn_data_type(torch_data_type) -> cudnn_data_type:
 
 def _torch_to_cutlass_data_type(data_type, interpret_uint8_as_fp4x2: bool = False):
     if is_cutlass_available() and is_torch_available():
-        import torch
+        import paddle as torch
 
         if interpret_uint8_as_fp4x2 and data_type == torch.uint8:
             import cutlass
@@ -173,7 +173,7 @@ def _library_type(input_type):
 
 def _is_torch_tensor(input_tensor) -> bool:
     if is_torch_available():
-        import torch
+        import paddle as torch
 
         return isinstance(input_tensor, torch.Tensor)
     return False
