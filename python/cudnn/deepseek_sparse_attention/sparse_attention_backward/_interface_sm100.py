@@ -12,22 +12,12 @@ from cudnn.deepseek_sparse_attention.utils.compiler import compile_options
 from cudnn.deepseek_sparse_attention.utils.runtime import resolve_stream, torch_stream_context
 from cudnn.deepseek_sparse_attention.utils.tensor_conversion import to_cute_tensor
 from .dsa_bwd_sm100 import FlashAttentionDSABackwardSm100
-from contextlib import contextmanager
-import paddle
 
 torch2cute_dtype_map = {
     torch.float16: cutlass.Float16,
     torch.bfloat16: cutlass.BFloat16,
     torch.float32: cutlass.Float32,
 }
-
-@contextmanager
-def nvtx_range(msg: str):
-    paddle.cuda.nvtx.range_push(msg)
-    try:
-        yield
-    finally:
-        paddle.cuda.nvtx.range_pop()
 
 
 def flash_attn_bwd_sm100(
@@ -202,7 +192,7 @@ def flash_attn_bwd_sm100(
             max_topk=max_topk,
         )
 
-        with nvtx_range("flash_attn_bwd_sm100_compile"):
+        with torch.cuda.nvtx.range("flash_attn_bwd_sm100_compile"):
             flash_attn_bwd_sm100.compile_cache[compile_key] = cute.compile(
                 kernel_obj,
                 problem_shape,
@@ -224,45 +214,25 @@ def flash_attn_bwd_sm100(
                 options=compile_options(),
             )
 
-    with nvtx_range("flash_attn_bwd_sm100_kernel"):
+    with torch.cuda.nvtx.range("flash_attn_bwd_sm100_kernel"):
         flash_attn_bwd_sm100.compile_cache[compile_key](
             problem_shape,
-            q_tensor,
-            kv_tensor,
-            out_tensor,
-            dout_tensor,
-            lse_tensor,
-            attn_sink_tensor,
-            topk_idxs_tensor,
-            topk_length_tensor,
-            dq_tensor,
-            dkv_tensor,
-            d_sink_tensor,
-            workspace_LSE_OdO_tensor,
-            workspace_dKV_tensor,
+            q,
+            kv,
+            out,
+            dout,
+            lse,
+            attn_sink,
+            topk_idxs,
+            topk_length,
+            dq,
+            dkv,
+            d_sink,
+            workspace_LSE_OdO,
+            workspace_dKV,
             softmax_scale,
             current_stream,
-            options=compile_options(),
         )
-
-    flash_attn_bwd_sm100.compile_cache[compile_key](
-        problem_shape,
-        q,
-        kv,
-        out,
-        dout,
-        lse,
-        attn_sink,
-        topk_idxs,
-        topk_length,
-        dq,
-        dkv,
-        d_sink,
-        workspace_LSE_OdO,
-        workspace_dKV,
-        softmax_scale,
-        current_stream,
-    )
 
     return dq, dkv, d_sink
 

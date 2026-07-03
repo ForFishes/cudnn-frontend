@@ -84,14 +84,6 @@ from cudnn.deepseek_sparse_attention.utils.tensor_conversion import to_cute_tens
 mul_packed_f32x2 = partial(cute.arch.mul_packed_f32x2, rnd="rn")
 fma_packed_f32x2 = partial(cute.arch.fma_packed_f32x2, rnd="rn")
 
-@contextmanager
-def nvtx_range(msg: str):
-    paddle.cuda.nvtx.range_push(msg)
-    try:
-        yield
-    finally:
-        paddle.cuda.nvtx.range_pop()
-
 
 # Barrier indices for kernel_gemm — per-stage barriers for S_FULL, DS_READY, K_LOADED
 # to avoid phase-wrap when producer runs 2 blocks ahead of consumer.
@@ -1649,18 +1641,19 @@ def _build_cute_dsl_kernel(heads, dim, topk, sm_scale, block_I, topk_indices_glo
         """Run only kernel 2 (GEMM). Caller must have run kernel 1 and zeroed dIndexK_f32."""
         s = _resolve_stream(current_stream)
         _ensure_compiled(IndexQ, Weights, IndexK, dIndexQ, dWeights, dIndexK_f32, GradSignal, TopkIndices, current_stream=current_stream)
-        _compile_cache[compile_key](
-            IndexQ,
-            Weights,
-            IndexK,
-            dIndexQ,
-            dWeights,
-            dIndexK_f32,
-            GradSignal,
-            TopkIndices,
-            cutlass.Float32(sm_scale),
-            s,
-        )
+        with torch.cuda.nvtx.range("indexer_backward_dsl_gemm"):
+            _compile_cache[compile_key](
+                IndexQ,
+                Weights,
+                IndexK,
+                dIndexQ,
+                dWeights,
+                dIndexK_f32,
+                GradSignal,
+                TopkIndices,
+                cutlass.Float32(sm_scale),
+                s,
+            )
 
     def _run(IndexQ, Weights, IndexK, dIndexQ, dWeights, dIndexK, AttnScore, IndexScore, TopkIndices, GradLoss, grad_scale, current_stream=None):
         # ``grad_scale`` is a host scalar (Python float / 0-D fp32 tensor)
