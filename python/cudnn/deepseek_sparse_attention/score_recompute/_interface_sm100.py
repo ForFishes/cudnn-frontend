@@ -834,8 +834,15 @@ def _dense_indexer_score_recompute(
     max_k_arg = cutlass.Int32(seqlen_k)
     # Dense indexer score is a raw-logit buffer, so masked/skipped positions
     # must remain outside the softmax/logsumexp domain.
+    #
+    # denom_out needs the same treatment for the same reason: the tile scheduler
+    # only visits q rows below cu_seqlens_q[-1], so in THD every row in
+    # [cu_seqlens_q[-1], total_q) is never written and would otherwise return
+    # whatever the allocator handed back.  0 is the safe value, not -inf:
+    # consumers compute exp(out - denom), and -inf - (-inf) is NaN.
     with _torch_stream_context(current_stream):
         out.fill_(float("-inf"))
+        denom_out.zero_()
     with torch.cuda.nvtx.range("dense_indexer_score_recompute"):
         _dense_indexer_score_recompute.compile_cache[compile_key](
             q,
@@ -1012,8 +1019,12 @@ def _dense_attn_score_recompute(
     max_k_arg = cutlass.Int32(seqlen_k)
     # Dense score kernels skip K blocks that are wholly outside the
     # ratio-causal region, so skipped masked/padding columns must be prefilled.
+    # denom_out is zeroed for the same reason as in the indexer path above: q
+    # rows at or beyond cu_seqlens_q[-1] are never visited by the scheduler, and
+    # an L1 norm of 0 is what "no candidate summed" should read as.
     with _torch_stream_context(current_stream):
         out.fill_(float("-inf"))
+        denom_out.zero_()
     with torch.cuda.nvtx.range("dense_attn_score_recompute"):
         _dense_attn_score_recompute.compile_cache[compile_key](
             q,
