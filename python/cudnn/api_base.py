@@ -14,7 +14,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, List, Tuple, Optional
 import logging
-import sys
 import threading
 import cuda.bindings.driver as cuda
 import cutlass
@@ -32,13 +31,20 @@ from cudnn.tensor_adapter import (
     get_strides,
 )
 
-# torch stays a lazy dependency: a torch tensor/dtype can only reach these APIs if torch
-# is already imported, so probing sys.modules never imports torch on behalf of other
-# frameworks (e.g. JAX).
+# On this branch the framework is always PaddlePaddle. Upstream probes
+# ``sys.modules["torch"]``, which is wrong here for two reasons: a real PyTorch is
+# routinely installed alongside Paddle in the same environment (and it describes neither
+# Paddle's dtypes -- ``paddle.dtype`` is not a ``torch.dtype``, so ``_check_dtype``
+# rejects every valid tensor with "Expected dtype to be a torch.dtype or list" -- nor
+# Paddle's devices or current stream), and ``paddle.enable_compat(scope={"cudnn"})``
+# rewrites only the *module-level* ``import torch`` of the modules it loads, so it never
+# puts the shim in ``sys.modules``. Reach for Paddle directly instead.
 
 
 def _torch():
-    return sys.modules.get("torch")
+    import paddle
+
+    return paddle
 
 
 _RAW_STREAM = None
@@ -47,12 +53,15 @@ _RAW_STREAM = None
 def _raw_stream(torch):
     """``device_index -> raw CUstream int``, resolved once.
 
-    ``torch._C._cuda_getCurrentRawStream`` is private, so fall back to the
-    documented accessor if a torch build ever drops it.
+    Paddle has no ``torch._C._cuda_getCurrentRawStream`` and its ``Stream`` exposes the
+    raw handle as ``stream_base.raw_stream`` rather than ``.cuda_stream``; this is the
+    same handle the DSA wrappers launch on (``utils/runtime.resolve_stream``).
     """
     global _RAW_STREAM
     if _RAW_STREAM is None:
-        _RAW_STREAM = getattr(torch._C, "_cuda_getCurrentRawStream", None) or (lambda _dev: torch.cuda.current_stream().cuda_stream)
+        _RAW_STREAM = getattr(getattr(torch, "_C", None), "_cuda_getCurrentRawStream", None) or (
+            lambda _dev: torch.cuda.current_stream().stream_base.raw_stream
+        )
     return _RAW_STREAM
 
 
@@ -118,9 +127,8 @@ class TensorDesc:
         stride = tuple(self.stride)
         stride_order = tuple(self.stride_order)
         device = self.device
-        # ``_torch()`` probes ``sys.modules["torch"]``, which on this branch is
-        # either absent or a real PyTorch installed alongside Paddle -- neither
-        # describes a Paddle device.  Probe Paddle directly instead.
+        # Paddle devices, spelled through Paddle directly rather than ``_torch()``
+        # so that this stays correct even if the compat shim is not installed.
         import paddle as torch
 
         if not isinstance(device, (torch.device.Device, Device)):
@@ -306,15 +314,21 @@ class TensorDesc:
     def is_contiguous(self, memory_format: Any = None) -> bool:
         """Row-major contiguity check; ``memory_format=None`` means torch.contiguous_format semantics."""
         torch = _torch()
-        if memory_format is None or (torch is not None and memory_format in {torch.contiguous_format, torch.preserve_format}):
+        # Paddle's torch-compat shim has no ``memory_format`` enum, so these
+        # attributes can be missing; look them up defensively instead of
+        # touching ``torch.contiguous_format`` unconditionally.
+        row_major_formats = {getattr(torch, name) for name in ("contiguous_format", "preserve_format") if hasattr(torch, name)}
+        if memory_format is None or memory_format in row_major_formats:
             if self._numel(self.shape) == 0:
                 return True
             return self._is_contiguous_with_order(self.shape, self.stride, tuple(range(self.ndim - 1, -1, -1)))
-        if torch is not None and memory_format == torch.channels_last:
+        channels_last = getattr(torch, "channels_last", None)
+        if channels_last is not None and memory_format == channels_last:
             if self.ndim != 4:
                 return False
             return self._is_contiguous_with_order(self.shape, self.stride, (1, 3, 2, 0))
-        if torch is not None and memory_format == torch.channels_last_3d:
+        channels_last_3d = getattr(torch, "channels_last_3d", None)
+        if channels_last_3d is not None and memory_format == channels_last_3d:
             if self.ndim != 5:
                 return False
             return self._is_contiguous_with_order(self.shape, self.stride, (1, 4, 3, 2, 0))

@@ -38,15 +38,20 @@ _torch_tensor_cls: Any = None
 
 def is_torch_tensor(tensor: Any) -> bool:
     # Called ~40x per grouped-GEMM launch (once per operand per metadata read), so the
-    # sys.modules probe and the .Tensor attribute lookup are worth caching. torch cannot
-    # be un-imported, so the class is stable once resolved; until then this re-probes.
+    # import and the .Tensor attribute lookup are worth caching; the class is stable
+    # once resolved.
+    #
+    # On this branch the framework is Paddle. Probing ``sys.modules["torch"]`` as upstream
+    # does is wrong here: it may be a real PyTorch installed alongside Paddle, which would
+    # classify every Paddle tensor as "unknown" -- silently downgrading ``get_strides`` to
+    # a C-contiguous guess and making ``default_stream`` hand back the legacy default
+    # stream instead of Paddle's current stream.
     global _torch_tensor_cls
     cls = _torch_tensor_cls
     if cls is None:
-        torch = sys.modules.get("torch")
-        if torch is None:
-            return False
-        cls = _torch_tensor_cls = torch.Tensor
+        import paddle
+
+        cls = _torch_tensor_cls = paddle.Tensor
     return isinstance(tensor, cls)
 
 
@@ -129,27 +134,25 @@ def default_stream(framework: str) -> cuda.CUstream:
     pass an explicit cuda.CUstream).
     """
     if framework == "torch":
-        import torch
+        import paddle
 
-        return cuda.CUstream(torch.cuda.current_stream().cuda_stream)
+        # Same handle the DSA wrappers launch on (``utils/runtime.resolve_stream``).
+        return cuda.CUstream(paddle.cuda.current_stream().stream_base.raw_stream)
     return cuda.CUstream(0)
 
 
 def cuda_is_available() -> bool:
-    torch = sys.modules.get("torch")
-    if torch is not None:
-        return torch.cuda.is_available()
-    from cuda.bindings import runtime as cudart
+    import paddle
 
-    err, count = cudart.cudaGetDeviceCount()
-    return err == cudart.cudaError_t.cudaSuccess and count > 0
+    return paddle.cuda.is_available()
 
 
 def get_compute_capability() -> Tuple[int, int]:
-    """(major, minor) of the current CUDA device, without requiring torch."""
-    torch = sys.modules.get("torch")
-    if torch is not None and torch.cuda.is_available():
-        return torch.cuda.get_device_capability(torch.cuda.current_device())
+    """(major, minor) of the current CUDA device."""
+    import paddle
+
+    if paddle.cuda.is_available():
+        return paddle.cuda.get_device_capability(paddle.cuda.current_device())
     from cuda.bindings import runtime as cudart
 
     def _check(result):
