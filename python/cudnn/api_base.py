@@ -665,7 +665,7 @@ class APIBase(ABC):
         :return: True if tensor/dtype is an FP4x2 packed type
         :rtype: bool
         """
-        return False # Paddle not support FP4 dtype now
+        return False  # Paddle not support FP4 dtype now
         if tensor_or_dtype is None:
             return False
         if isinstance(tensor_or_dtype, TensorDesc):

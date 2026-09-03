@@ -19,7 +19,8 @@ def _dim_order(t):
     if hasattr(t, "dim_order"):
         return t.dim_order()
     return tuple(
-        i for i, _ in sorted(
+        i
+        for i, _ in sorted(
             enumerate(tuple(t.stride())),
             key=lambda item: item[1],
             reverse=True,

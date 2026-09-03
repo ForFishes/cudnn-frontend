@@ -10,8 +10,8 @@ from typing import Iterator, Optional
 import torch
 import cuda.bindings.driver as cuda
 
-
 if hasattr(torch.cuda, "nvtx") and not hasattr(torch.cuda.nvtx, "range"):
+
     @contextmanager
     def _nvtx_range(msg: str) -> Iterator[None]:
         torch.cuda.nvtx.range_push(msg)

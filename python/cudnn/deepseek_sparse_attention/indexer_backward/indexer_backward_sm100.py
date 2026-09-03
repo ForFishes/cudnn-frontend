@@ -80,7 +80,6 @@ from cudnn.deepseek_sparse_attention.utils.runtime import (
 )
 from cudnn.deepseek_sparse_attention.utils.tensor_conversion import to_cute_tensor
 
-
 mul_packed_f32x2 = partial(cute.arch.mul_packed_f32x2, rnd="rn")
 fma_packed_f32x2 = partial(cute.arch.fma_packed_f32x2, rnd="rn")
 

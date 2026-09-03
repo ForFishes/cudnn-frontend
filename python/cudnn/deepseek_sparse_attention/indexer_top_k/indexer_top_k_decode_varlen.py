@@ -21,8 +21,9 @@ import cuda.bindings.driver as cuda
 import cutlass
 import cutlass.cute as cute
 import cutlass.utils as utils
+
 # import torch
-import paddle as torch # why need this? lazy import?
+import paddle as torch  # why need this? lazy import?
 from cutlass.utils.distributed import atomicAdd
 
 from cudnn.deepseek_sparse_attention.utils.compiler import compile_options
@@ -684,13 +685,9 @@ def cute_dsl_topk_wrapper(
         compiled_kernel = _compile_cache[key]
 
     output_place = input_values.place
-    output_indices_torch = torch.empty(
-        num_rows, top_k, dtype=torch.int32, device=output_place
-    )
+    output_indices_torch = torch.empty(num_rows, top_k, dtype=torch.int32, device=output_place)
     if return_val:
-        output_values_torch = torch.empty(
-            num_rows, top_k, dtype=torch_dtype, device=output_place
-        )
+        output_values_torch = torch.empty(num_rows, top_k, dtype=torch_dtype, device=output_place)
     else:
         output_values_torch = None
 
