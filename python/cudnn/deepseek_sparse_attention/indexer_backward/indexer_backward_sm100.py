@@ -86,7 +86,6 @@ from functools import partial
 from typing import Any, cast
 import torch
 import cuda.bindings.driver as cuda
-
 import cutlass
 import cutlass.cute as cute
 from cutlass.cute import atom as cute_atom
@@ -121,6 +120,7 @@ from cudnn.deepseek_sparse_attention.utils.runtime import (
     resolve_stream as _resolve_stream,
     torch_stream_context as _torch_stream_context,
 )
+from cudnn.deepseek_sparse_attention.utils.tensor_conversion import to_cute_tensor
 from cudnn.frost.buffers import memset_zero_async
 
 from .deterministic_dk_sm100 import (
@@ -3793,7 +3793,6 @@ def _score_grad_inplace_cute(
     dIndexK_f32=None,
     current_stream=None,
 ):
-    from cudnn.deepseek_sparse_attention.utils.tensor_conversion import to_cute_tensor
 
     # Kernel reads ``mGradLoss[0]`` so it must be at least 1-D. ``to_cute_tensor``
     # defaults ``leading_dim = ndim - 1`` which collapses to -1 for a 0-D scalar
@@ -3895,7 +3894,6 @@ def _build_cute_dsl_kernel(
     deterministic_dk_planes: int = DEFAULT_DK_PLANES,
 ):
     """Create lazily compiled score/GEMM runners for one launch policy."""
-    from cudnn.deepseek_sparse_attention.utils.tensor_conversion import to_cute_tensor
 
     persistent_grid_size = None
     if deterministic:
@@ -4119,7 +4117,7 @@ def _build_cute_dsl_kernel(
                 current_stream=current_stream,
             )
             with _torch_stream_context(current_stream):
-                dIndexK.copy_(dIndexK_f32)
+                dIndexK.copy_(dIndexK_f32.astype(dIndexK.dtype))
 
     _run.score_grad = partial(_score_grad_inplace, block_I=block_I)
     _run.score_grad_zero = partial(_score_grad_inplace, block_I=block_I)

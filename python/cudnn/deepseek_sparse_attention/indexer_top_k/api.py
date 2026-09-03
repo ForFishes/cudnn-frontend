@@ -18,6 +18,7 @@ from cudnn.deepseek_sparse_attention.utils.runtime import (
 
 from .compactify import compactify as _compactify
 from .local_to_global_dsl import local_to_global as _local_to_global
+from . import indexer_top_k_decode_varlen
 
 _SUPPORTED_DTYPES = (torch.float32, torch.float16, torch.bfloat16)
 # These limits keep the deterministic radix scratch, maximum selected-index
@@ -30,9 +31,9 @@ _SM120_DETERMINISTIC_MAX_NUM_COLS = {
 
 
 def _kernel_module():
-    """Import the CuTe DSL implementation only when Top-K is used."""
-    from . import indexer_top_k_decode_varlen
-
+    # Imported eagerly at module top: paddlefleet_ops renames ``cudnn.*`` to
+    # ``paddlefleet_ops.cudnn.*`` after load, so a lazy relative import here
+    # would miss the torch-proxy scope.
     return indexer_top_k_decode_varlen
 
 

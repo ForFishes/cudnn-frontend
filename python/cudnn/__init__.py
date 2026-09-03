@@ -772,6 +772,11 @@ def _optional_dependency_message(name: str, error: Exception) -> str:
     return f"{name} requires optional dependencies. {install_hint}: {error}"
 
 
+# Import some modules eagerly
+from cudnn import api_base as api_base
+from cudnn.deepseek_sparse_attention import DSA as DSA
+
+
 def __getattr__(name: str) -> Any:
     if name in ("Graph", "wrapper"):
         _wrapper = importlib.import_module(".wrapper", __name__)
