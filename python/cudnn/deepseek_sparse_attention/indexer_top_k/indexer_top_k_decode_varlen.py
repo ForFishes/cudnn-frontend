@@ -21,7 +21,11 @@ import cuda.bindings.driver as cuda
 import cutlass
 import cutlass.cute as cute
 import cutlass.utils as utils
-import torch
+
+# import torch
+import paddle as torch  # why need this? lazy import?
+from cutlass.utils.distributed import atomicAdd
+
 from cudnn.deepseek_sparse_attention.utils.compiler import compile_options
 
 from .block_scan import block_prefix_sum_kernel
@@ -680,9 +684,10 @@ def cute_dsl_topk_wrapper(
     else:
         compiled_kernel = _compile_cache[key]
 
-    output_indices_torch = torch.empty(num_rows, top_k, dtype=torch.int32, device="cuda")
+    output_place = input_values.place
+    output_indices_torch = torch.empty(num_rows, top_k, dtype=torch.int32, device=output_place)
     if return_val:
-        output_values_torch = torch.empty(num_rows, top_k, dtype=torch_dtype, device="cuda")
+        output_values_torch = torch.empty(num_rows, top_k, dtype=torch_dtype, device=output_place)
     else:
         output_values_torch = None
 
@@ -690,7 +695,6 @@ def cute_dsl_topk_wrapper(
         buffer_numbers = 2
     else:
         buffer_numbers = 1
-
     # Decode-varlen IMA workaround.
     elems_per_row = buffer_numbers * num_cols
     int32_max = (1 << 31) - 1
@@ -703,7 +707,7 @@ def cute_dsl_topk_wrapper(
             buffer_numbers,
             num_cols,
             dtype=torch.int32,
-            device="cuda",
+            device=output_place,
         )
         # TVM FFI uses env stream automatically
         compiled_kernel(
@@ -738,7 +742,7 @@ def cute_dsl_topk_wrapper(
             buffer_numbers,
             num_cols,
             dtype=torch.int32,
-            device="cuda",
+            device=output_place,
         )
         compiled_kernel(
             input_values[row_lo:row_hi],

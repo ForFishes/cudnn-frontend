@@ -10,6 +10,18 @@ from typing import Iterator, Optional
 import torch
 import cuda.bindings.driver as cuda
 
+if hasattr(torch.cuda, "nvtx") and not hasattr(torch.cuda.nvtx, "range"):
+
+    @contextmanager
+    def _nvtx_range(msg: str) -> Iterator[None]:
+        torch.cuda.nvtx.range_push(msg)
+        try:
+            yield
+        finally:
+            torch.cuda.nvtx.range_pop()
+
+    torch.cuda.nvtx.range = _nvtx_range
+
 
 @lru_cache(maxsize=None)
 def device_major() -> int:
@@ -55,7 +67,7 @@ def validate_q_causal_offsets(
 def resolve_stream(current_stream: Optional[cuda.CUstream] = None) -> cuda.CUstream:
     if current_stream is not None:
         return current_stream
-    return cuda.CUstream(torch.cuda.current_stream().cuda_stream)
+    return cuda.CUstream(torch.cuda.current_stream().stream_base.raw_stream)
 
 
 @contextmanager
@@ -63,5 +75,9 @@ def torch_stream_context(current_stream: Optional[cuda.CUstream] = None) -> Iter
     if current_stream is None:
         yield
         return
-    with torch.cuda.stream(torch.cuda.get_stream_from_external(int(current_stream))):
+    if not hasattr(torch.cuda, "ExternalStream") and hasattr(torch.cuda, "get_stream_from_external"):
+        with torch.cuda.stream(torch.cuda.get_stream_from_external(int(current_stream))):
+            yield
+        return
+    with torch.cuda.stream(torch.cuda.ExternalStream(int(current_stream))):
         yield

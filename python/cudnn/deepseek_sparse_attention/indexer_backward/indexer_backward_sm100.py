@@ -56,7 +56,6 @@ import math
 from functools import partial
 import torch
 import cuda.bindings.driver as cuda
-
 import cutlass
 import cutlass.cute as cute
 from cutlass import Float32, Int32, const_expr
@@ -79,6 +78,7 @@ from cudnn.deepseek_sparse_attention.utils.runtime import (
     resolve_stream as _resolve_stream,
     torch_stream_context as _torch_stream_context,
 )
+from cudnn.deepseek_sparse_attention.utils.tensor_conversion import to_cute_tensor
 
 mul_packed_f32x2 = partial(cute.arch.mul_packed_f32x2, rnd="rn")
 fma_packed_f32x2 = partial(cute.arch.fma_packed_f32x2, rnd="rn")
@@ -1544,7 +1544,6 @@ class ScoreGradSm100:
 
 
 def _score_grad_inplace_cute(AttnScore, IndexScore, GradLoss, grad_scale, current_stream=None):
-    from cudnn.deepseek_sparse_attention.utils.tensor_conversion import to_cute_tensor
 
     # Kernel reads ``mGradLoss[0]`` so it must be at least 1-D. ``to_cute_tensor``
     # defaults ``leading_dim = ndim - 1`` which collapses to -1 for a 0-D scalar
@@ -1609,7 +1608,6 @@ def _score_grad_inplace(AttnScore, IndexScore, GradLoss, grad_scale, block_I=128
 
 
 def _build_cute_dsl_kernel(heads, dim, topk, sm_scale, block_I, topk_indices_global: bool = True):
-    from cudnn.deepseek_sparse_attention.utils.tensor_conversion import to_cute_tensor
 
     if torch.cuda.get_device_capability()[0] < 10:
         raise RuntimeError("Requires SM100+")
@@ -1682,7 +1680,7 @@ def _build_cute_dsl_kernel(heads, dim, topk, sm_scale, block_I, topk_indices_glo
                 dIndexK_f32 = torch.zeros_like(dIndexK, dtype=torch.float32)
             _run_gemm_only(IndexQ, Weights, IndexK, dIndexQ, dWeights, dIndexK_f32, AttnScore, TopkIndices, current_stream=current_stream)
             with _torch_stream_context(current_stream):
-                dIndexK.copy_(dIndexK_f32)
+                dIndexK.copy_(dIndexK_f32.astype(dIndexK.dtype))
 
     _run.score_grad = partial(_score_grad_inplace, block_I=block_I)
     _run.gemm_only = _run_gemm_only
