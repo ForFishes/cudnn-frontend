@@ -22,6 +22,7 @@ from cudnn.api_base import APIBase, TupleDict
 from cudnn._torch_stream import contiguous_on_stream, copy_into_on_stream
 from cudnn.deepseek_sparse_attention.utils.runtime import resolve_stream, torch_stream_context
 
+from . import _interface_sm90 as _iface_sm90
 from . import _interface_sm100 as _iface_sm100
 from . import _interface_sm100_d576 as _iface_d576
 from ._sm90_relay import (
@@ -450,8 +451,6 @@ class SparseAttentionBackward(APIBase):
 
             return workspace_size(total_s_q, total_s_kv, head_dim, num_heads, self.topk_idxs_desc.shape[1])
         if major == 9:
-            from . import _interface_sm90 as _iface_sm90
-
             return _iface_sm90.flash_attn_bwd_sm90_workspace_size(
                 total_s_q,
                 total_s_kv,
@@ -557,8 +556,6 @@ class SparseAttentionBackward(APIBase):
         major, _ = device_capability(q.device)
         with torch.cuda.device(q.device):
             if major == 9:
-                from . import _interface_sm90 as _iface_sm90
-
                 return _iface_sm90.flash_attn_bwd_sm90(
                     q,
                     kv,
