@@ -219,9 +219,9 @@ def allocate_byte_workspace(framework: str, nbytes: int, device: Any) -> Any:
     """
     nbytes = max(int(nbytes), 1)
     if framework == "torch":
-        import torch
+        import paddle
 
-        return torch.empty(nbytes, dtype=torch.uint8, device=device)
+        return paddle.empty(nbytes, dtype=paddle.uint8, device=device)
     if framework == "jax":
         import jax
         import jax.numpy as jnp
@@ -287,11 +287,11 @@ def framework_dtype(dtype: Any, framework: str) -> Any:
     canonical = _convert_to_cutlass_data_type(dtype)
     name = _cutlass_to_dtype_name(canonical)
     if framework == "torch":
-        import torch
+        import paddle
 
         if name == "float4_e2m1fn":
-            return torch.float4_e2m1fn_x2
-        return getattr(torch, name)
+            return paddle.float4_e2m1fn_x2
+        return getattr(paddle, name)
     if framework == "jax":
         if name == "float4_e2m1fn":
             raise ValueError("JAX has no packed fp4 dtype; use a uint8 container tensor instead.")

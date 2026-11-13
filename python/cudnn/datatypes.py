@@ -3,6 +3,8 @@
 
 import sys
 import importlib
+import cudnn
+from .frost.buffers import DTYPES
 
 
 def is_windows():
@@ -336,8 +338,6 @@ def _library_type(input_type):
     # with the type callers already catch, so a routing layer can read it as
     # "the backend cannot represent this" instead of guessing from a bare
     # Exception.
-    import cudnn
-
     raise cudnn.cudnnGraphNotSupportedError(f"No available conversion from type {input_type} to a library type.")
 
 
@@ -365,8 +365,6 @@ _CUDNN_TO_DLPACK_CODE_BITS = {}
 
 
 def _init_dlpack_dtype_tables():
-    from .frost.buffers import DTYPES
-
     for enum, name in _CUDNN_TO_FROST_DTYPE_NAME.items():
         code_bits = DTYPES.get(name)
         if code_bits is None:

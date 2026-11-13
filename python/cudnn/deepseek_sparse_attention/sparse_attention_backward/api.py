@@ -31,6 +31,7 @@ from ._sm90_relay import (
     sm90_deterministic_relay_indexing_error,
     sm90_deterministic_relay_requirement_error,
 )
+from ._qcluster_sm100 import compile_plan, workspace_size
 
 
 def _checked_deterministic_relay_cluster_size(value: Optional[int]) -> Optional[int]:
@@ -340,8 +341,6 @@ class SparseAttentionBackward(APIBase):
         """
         self._ensure_support_checked()
         if self.q_cluster_mode == "adaptive_pair":
-            from ._qcluster_sm100 import compile_plan
-
             total_q, heads, dim = self.q_desc.shape
             tile = 128 if heads == 16 else 64
             if total_q >= 2 and self.topk_idxs_desc.shape[1] > 2 * tile:
@@ -447,8 +446,6 @@ class SparseAttentionBackward(APIBase):
         total_s_kv = self.kv_desc.shape[0]
         tile = 128 if num_heads == 16 else 64
         if self.q_cluster_mode == "adaptive_pair" and total_s_q >= 2 and self.topk_idxs_desc.shape[1] > 2 * tile:
-            from ._qcluster_sm100 import workspace_size
-
             return workspace_size(total_s_q, total_s_kv, head_dim, num_heads, self.topk_idxs_desc.shape[1])
         if major == 9:
             return _iface_sm90.flash_attn_bwd_sm90_workspace_size(

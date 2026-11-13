@@ -111,9 +111,7 @@ def create_handle():
     raw = _pybind_module.create_handle()
     ordinal = None
     try:
-        from .frost.device import current_device
-
-        ordinal = current_device()
+        ordinal = _frost_device.current_device()
     except Exception:
         ordinal = None  # no GPU visible / cuda-python absent: resolve lazily on .device
     # Seed the stream from the backend's actual stream (a fresh handle runs on
@@ -762,9 +760,7 @@ def _optional_dependency_message(name: str, error: Exception) -> str:
         # (torch, jax) and only fetches cuda-python via the extra.
         return f"{name} requires the {missing!r} module, which is not installed. {install_hint}: {error}"
     try:
-        from .frost.buffers import cutedsl_requirement_error
-
-        too_old = cutedsl_requirement_error(name)
+        too_old = _frost_buffers.cutedsl_requirement_error(name)
     except Exception:
         too_old = None
     if too_old is not None:
@@ -774,6 +770,8 @@ def _optional_dependency_message(name: str, error: Exception) -> str:
 
 # Import some modules eagerly
 from cudnn import api_base as api_base
+from cudnn.frost import buffers as _frost_buffers
+from cudnn.frost import device as _frost_device
 from cudnn.deepseek_sparse_attention import DSA as DSA
 
 

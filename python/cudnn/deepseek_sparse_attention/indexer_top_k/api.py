@@ -9,7 +9,7 @@ from typing import Optional, Tuple
 
 import cuda.bindings.driver as cuda
 import torch
-from cudnn._torch_stream import contiguous_on_stream, device_context, launch_stream
+from cudnn._torch_stream import _record_stream, contiguous_on_stream, device_context, launch_stream
 from cudnn.api_base import APIBase, TupleDict, WorkspaceCarver, ws_align
 from cudnn.deepseek_sparse_attention.utils.runtime import device_capability
 from cudnn.deepseek_sparse_attention.utils.runtime import (
@@ -81,9 +81,9 @@ def _aligned_contiguous_on_stream(tensor: torch.Tensor, stream, alignment: int) 
     tensor = contiguous_on_stream(tensor, stream, tensor.device)
     if tensor.data_ptr() % alignment == 0:
         return tensor
-    tensor.record_stream(launch_stream(stream, tensor.device))
+    _record_stream(tensor, launch_stream(stream, tensor.device))
     with _torch_stream_context(stream, tensor.device):
-        return tensor.clone(memory_format=torch.contiguous_format)
+        return tensor.clone()  # contiguous input, so clone() is contiguous (Paddle has no memory_format)
 
 
 class IndexerTopK(APIBase):
@@ -340,7 +340,7 @@ class IndexerTopK(APIBase):
         consumer = launch_stream(current_stream, device)
         for tensor in (input_values, seq_lens, out_indices, out_values, workspace):
             if tensor is not None:
-                tensor.record_stream(consumer)
+                _record_stream(tensor, consumer)
         return out_indices, out_values
 
 

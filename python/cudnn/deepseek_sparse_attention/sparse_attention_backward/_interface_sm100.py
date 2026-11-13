@@ -26,6 +26,18 @@ from .dsa_bwd_sm100_deterministic import (
     _deterministic_kernel_class_for_config,
     deterministic_kernel_class,
 )
+from .dsa_bwd_sm100_h128_2cta import (
+    FlashAttentionDSABackwardSm100H128TwoCTA,
+    FlashAttentionDSABackwardSm100H128TwoCTADeterministic,
+)
+from .dsa_bwd_sm100_h128_d576_2cta import (
+    FlashAttentionDSABackwardSm100H128D576TwoCTA,
+    FlashAttentionDSABackwardSm100H128D576TwoCTADeterministic,
+)
+from .dsa_bwd_sm100_h16 import FlashAttentionDSABackwardSm100H16
+from .dsa_bwd_sm100_h32 import FlashAttentionDSABackwardSm100H32
+from .dsa_bwd_sm100_h96 import FlashAttentionDSABackwardSm100H96, FlashAttentionDSABackwardSm100H96Deterministic
+from ._interface_sm100_d576 import flash_attn_bwd_sm100_d576_2cta
 
 torch2cute_dtype_map = {
     torch.float16: cutlass.Float16,
@@ -178,24 +190,14 @@ def _get_sm100_kernel_class(
         if backend != "generic_m64":
             raise ValueError("deterministic_relay_cluster_size is supported only by the deterministic generic_m64 backend")
     if backend == "h128_2cta_m64":
-        from .dsa_bwd_sm100_h128_2cta import FlashAttentionDSABackwardSm100H128TwoCTA, FlashAttentionDSABackwardSm100H128TwoCTADeterministic
-
         return FlashAttentionDSABackwardSm100H128TwoCTADeterministic if deterministic else FlashAttentionDSABackwardSm100H128TwoCTA
     if backend in ("h96_d576_2cta_m64", "h128_d576_2cta_m64"):
-        from .dsa_bwd_sm100_h128_d576_2cta import FlashAttentionDSABackwardSm100H128D576TwoCTA, FlashAttentionDSABackwardSm100H128D576TwoCTADeterministic
-
         return FlashAttentionDSABackwardSm100H128D576TwoCTADeterministic if deterministic else FlashAttentionDSABackwardSm100H128D576TwoCTA
     if backend == "h16_m128":
-        from .dsa_bwd_sm100_h16 import FlashAttentionDSABackwardSm100H16
-
         return FlashAttentionDSABackwardSm100H16
     if backend == "h32_m64":
-        from .dsa_bwd_sm100_h32 import FlashAttentionDSABackwardSm100H32
-
         return FlashAttentionDSABackwardSm100H32
     if backend == "h96_h64_h32":
-        from .dsa_bwd_sm100_h96 import FlashAttentionDSABackwardSm100H96, FlashAttentionDSABackwardSm100H96Deterministic
-
         return FlashAttentionDSABackwardSm100H96Deterministic if deterministic else FlashAttentionDSABackwardSm100H96
     if deterministic:
         if total_s_q is None or total_s_kv is None or head_dim is None:
@@ -571,8 +573,6 @@ def flash_attn_bwd_sm100(
         # The D576 two-CTA kernel has its own plan-time compile and launch
         # contract (see ``_interface_sm100_d576``); it shares this entry point
         # only so direct callers get the same selection as the plan.
-        from ._interface_sm100_d576 import flash_attn_bwd_sm100_d576_2cta
-
         return flash_attn_bwd_sm100_d576_2cta(
             q,
             kv,
