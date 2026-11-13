@@ -504,8 +504,9 @@ class IndexerBackwardSm100:
         # tiles into the same FP32 GEMMs.
         # The Gather4 loader issues a fixed 4 warps x 8 lanes x 4 rows = 128
         # rows per stage. With block_I=64 it lands twice the stage's expect-tx
-        # bytes on MBAR_K_LOADED and the kernel never finishes; the cp.async
-        # loader is block_I-generic.
+        # bytes on MBAR_K_LOADED and the kernel never finishes. The cp.async
+        # loader finishes but its d_index_k is wrong at block_I=64, so
+        # IndexerBackward.check_support rejects block_I != 128 on SM100.
         self.use_tma_gather = _HAS_TMA_GATHER4 and block_I == 128
         # Cross-row double buffering is sized for the established short-row
         # variants. Deterministic TopK 1024/2048 uses the fully drained serial

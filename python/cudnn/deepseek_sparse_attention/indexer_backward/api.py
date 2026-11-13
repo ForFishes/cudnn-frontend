@@ -453,6 +453,13 @@ class IndexerBackward(APIBase):
                 self.heads != 32 and self.heads < 64,
                 f"the default SM100 IndexerBackward requires H=32 or H>=64, got H={self.heads}",
             )
+            # block_I=64 hangs on the TMA Gather4 loader and, on the cp.async
+            # loader, returns d_index_k with ~1.4 relative L2 error (dQ / dW stay
+            # correct), so it is rejected rather than run.
+            self._value_error_if(
+                self.block_I != 128,
+                f"the default SM100 IndexerBackward requires block_I=128, got block_I={self.block_I}",
+            )
         if self.use_v2:
             b, s_q, s_k = self.batch, self.seqlen, self.seqlen_k
             h, d, topk = self.heads, self.head_dim, self.topk
