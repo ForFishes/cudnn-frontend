@@ -502,7 +502,11 @@ class IndexerBackwardSm100:
         # needed to construct a Gather4 descriptor. Keep those wheels on the
         # existing manual cp.async loader; both paths feed identical BF16 K
         # tiles into the same FP32 GEMMs.
-        self.use_tma_gather = _HAS_TMA_GATHER4
+        # The Gather4 loader issues a fixed 4 warps x 8 lanes x 4 rows = 128
+        # rows per stage. With block_I=64 it lands twice the stage's expect-tx
+        # bytes on MBAR_K_LOADED and the kernel never finishes; the cp.async
+        # loader is block_I-generic.
+        self.use_tma_gather = _HAS_TMA_GATHER4 and block_I == 128
         # Cross-row double buffering is sized for the established short-row
         # variants. Deterministic TopK 1024/2048 uses the fully drained serial
         # persistent loop so its one-row SMEM footprint stays within the cap.
