@@ -91,7 +91,8 @@ def tensor_byte_span(t) -> Tuple[int, int]:
     side, a zero stride on neither), the last element's bytes included; an empty tensor spans nothing (``lo == hi``).  Host arithmetic on
     the metadata alone -- no device read, no synchronisation -- so it belongs on an execute path (Rule 1 / Rule 3)."""
     base = int(t.data_ptr())
-    if t.numel() == 0:
+    # Shape, not ``numel()``: under Paddle ``numel()`` is a 0-D GPU tensor and comparing it syncs.
+    if 0 in tuple(t.shape):
         return base, base
     item = int(t.element_size())
     lo = hi = 0
@@ -1215,14 +1216,18 @@ class WorkspaceCarver:
         flat = workspace if workspace.dtype == torch.uint8 else workspace.view(torch.uint8)
         if flat.dim() != 1:
             flat = flat.view(-1)
-        if flat.numel() < required:
+        # Host byte count from the 1-D shape: under Paddle ``numel()`` is a 0-D GPU tensor and every
+        # comparison against it is a device-to-host sync on the execute path.
+        nbytes = int(flat.shape[0])
+        if nbytes < required:
             raise ValueError(
                 f"cudnn: {owner} requires a {required}-byte workspace; the provided "
-                f"buffer has only {flat.numel()} bytes (size it with graph.get_workspace_size())"
+                f"buffer has only {nbytes} bytes (size it with graph.get_workspace_size())"
             )
         if flat.data_ptr() % align != 0:
             raise ValueError(f"cudnn: {owner} workspace must be at least {align}-byte aligned; got data_ptr=0x{flat.data_ptr():x}")
         self._flat = flat
+        self._nbytes = nbytes
         self._off = 0
         self._owner = owner
 
@@ -1230,10 +1235,10 @@ class WorkspaceCarver:
         """The next scratch chunk: a 1-D ``numel``-element view of ``dtype``."""
         nbytes = int(numel) * dtype.itemsize
         start, end = self._off, self._off + nbytes
-        if end > self._flat.numel():
-            raise ValueError(f"cudnn: {self._owner} workspace overrun: chunk [{start}, {end}) exceeds the {self._flat.numel()}-byte buffer (sizing bug)")
+        if end > self._nbytes:
+            raise ValueError(f"cudnn: {self._owner} workspace overrun: chunk [{start}, {end}) exceeds the {self._nbytes}-byte buffer (sizing bug)")
         self._off = start + ws_align(nbytes)
-        chunk = self._flat if start == 0 and end == self._flat.numel() else self._flat[start:end]
+        chunk = self._flat if start == 0 and end == self._nbytes else self._flat[start:end]
         try:
             return chunk.view(dtype)
         except RuntimeError as exc:

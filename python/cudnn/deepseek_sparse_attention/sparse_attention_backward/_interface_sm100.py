@@ -89,8 +89,11 @@ def _carve_workspace_sm100(
     if not workspace.is_contiguous():
         raise ValueError("workspace must be contiguous")
     flat = workspace.view(-1)
-    if flat.numel() < required:
-        raise ValueError(f"SM100 DSA backward requires a {required}-byte workspace; the provided buffer has {flat.numel()} bytes")
+    # ``shape``, not ``numel()``: under Paddle's torch proxy ``numel()`` is a 0-D device
+    # tensor, so comparing it forces a device-to-host sync on every call.
+    workspace_bytes = int(flat.shape[0])
+    if workspace_bytes < required:
+        raise ValueError(f"SM100 DSA backward requires a {required}-byte workspace; the provided buffer has {workspace_bytes} bytes")
     if flat.data_ptr() % 16 != 0:
         raise ValueError(f"workspace must be at least 16-byte aligned; got data_ptr=0x{flat.data_ptr():x}")
 
@@ -623,7 +626,7 @@ def flash_attn_bwd_sm100(
     # sum_dSink uses atomics and needs this reset; deterministic sum_dSink and
     # the H128 two-CTA zero_init overwrite/clear d_sink themselves.
     if not uses_h128_two_cta and not deterministic:
-        memset_zero_async(d_sink.data_ptr(), d_sink.numel() * d_sink.element_size(), int(current_stream))
+        memset_zero_async(d_sink.data_ptr(), math.prod(d_sink.shape) * d_sink.element_size(), int(current_stream))
 
     problem_shape = (total_S_q, total_S_kv, head_dim, (num_head, batch_size))
 
